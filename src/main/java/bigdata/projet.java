@@ -26,43 +26,52 @@ public class projet {
 		SparkConf conf = new SparkConf().setAppName("TP Spark");
 		JavaSparkContext context = new JavaSparkContext(conf);
 		JavaRDD<String> distFile = context.textFile(args[0]);
-		//On vérifie que la ligne est Idle (Colonne 3 List des patterns = -1)
-		Function<String, Boolean> isIdle = k -> 
-		{
-			String splitTab[] = k.split(";");
-		 	return splitTab[4].equals("0");
-		};
-		//On vérifie que la ligne n'est =as Idle (Colonne 3 List des patterns != -1) et on 
-		//ne prends pas la première ligne (d'où le !splitTab[3].equals("phases") )
-		Function<String, Boolean> isNotIdle = k -> 
-		{
-			String splitTab[] = k.split(";");
-		 	return !(splitTab[4].equals("0") || splitTab[4].equals("nphases") );
-		};
-		JavaRDD<String> withIdle = distFile.filter(isIdle);
-		//On converti en double pour calculer la variance
-		//JavaDoubleRDD withoutIdleDuration = withoutIdle.mapToDouble(S -> Double.valueOf(S.split(";")[2]) );
-		JavaDoubleRDD withIdleDuration = distFile.filter(isIdle).mapToDouble(S -> Double.valueOf(S.split(";")[2]) );
-		JavaPairRDD<String, String> pair = withIdle.mapToPair(s ->  {
-			String split = s.split(";")[3];
-			return new Tuple2<String,String>(split,s);
-		});
-		JavaPairRDD<String, Iterable<String>> groupByKeyPattern = pair.groupByKey();
-		//JavaPairRDD<String, Iterable<String>> groupByPattern = withIdle.groupBy(row -> row.split(";")[4]);
-		System.out.println("patate");
-		//groupByKeyPattern.foreach(s -> System.out.println(s._1()));
-
-		System.out.println(groupByKeyPattern.count());
-		System.out.println("patate");
-		groupByKeyPattern.foreach(s -> System.out.println(s._1()));
-		//On Calcule la variance avec les methodes de spark
-		//System.out.println(withoutIdleDuration.variance());
-		//System.out.println(withIdleDuration.variance());
-
-
-		context.close();
 		
-		//cachedRatingsForUser.unpersist(false);
+		JavaRDD<Activity> activities = context.textFile(args[0])
+		.filter(line -> !line.split(";")[0].equals("start") )
+        .map(line -> line.split(";"))
+        .map(row -> new Activity(
+                Long.parseLong(row[0]),
+                Long.parseLong(row[1]),
+                Long.parseLong(row[2]),
+				row[3].split(","),
+				Integer.parseInt(row[4]),
+				row[5].split(","),
+				Integer.parseInt(row[6]),
+				row[7].split(","),
+				Integer.parseInt(row[8])
+		));
+		//Exo 1 Pour les phases qui ne sont pas idle, la distribution de leur durée
+		JavaRDD<Activity> cachedActivitiesNotIdle = activities
+			.filter(activity -> activity.nPatterns > 0)
+			.cache();
+
+		JavaDoubleRDD doubleDurationActivitiesNotIdle = cachedActivitiesNotIdle
+		.mapToDouble(activity -> activity.duration );
+
+
+		JavaRDD<Activity> distData = cachedActivitiesNotIdle.parallelize();
+		cachedActivitiesNotIdle.
+		
+
+		//int nStep = 10;
+		//double step = (maxNotIdle - minNotIdle) / (double)(nStep);
+
+		
+		//Exo 2 La distribution de la durée des phases idle.
+		//JavaRDD<Activity> cachedActivitiesIdle = activities
+		//	.filter(activity -> activity.nPatterns == 0)
+		//	.cache();
+		
+		//double meanIdle = cachedActivitiesIdle
+		//	.mapToDouble(activity -> activity.duration )
+		//	.mean();
+
+		//cachedActivitiesNotIdle.unpersist(false);
+		//System.out.println("|Pour les activités |\t Min \t|\t\t Max \t\t|");
+		//System.out.println("|     NotIdle       |\t " + minNotIdle + " \t|\t " + maxNotIdle + " \t|");
+		//System.out.println("|      Idle         |\t" + meandle + "\t|");
+		context.close();
 	}
 	
 }
