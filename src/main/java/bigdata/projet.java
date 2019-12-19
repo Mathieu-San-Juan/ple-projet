@@ -35,52 +35,49 @@ public class projet {
 		
 		SparkConf conf = new SparkConf().setAppName("TP Spark");
 		JavaSparkContext context = new JavaSparkContext(conf);
-		JavaRDD<String> distFile = context.textFile(args[0]);
+		JavaRDD<String> distFile = context.textFile(args[0]).filter(line -> !line.split(";")[0].equals("start") );
 		
+		int nTranches = 10;
 		//Exo 1 Pour les phases qui ne sont pas idle, la distribution de leur durée	
 		JavaDoubleRDD doubleDurationActivitiesNotIdle = distFile
-			.filter(line -> !line.split(";")[0].equals("start") )
 			.filter(activity -> Integer.parseInt(activity.split(";")[4]) > 0)
 			.mapToDouble(activity -> Double.parseDouble(activity.split(";")[2]) );
 		
-		StatCounter statDurationActivitiesNotIdle = doubleDurationActivitiesNotIdle.stats();
-		int nTranche = 10;
-		Tuple2<double[],long[]> test=doubleDurationActivitiesNotIdle.histogram(nTranche);
-		double[] d =test._1 ;
-		long[] l =test._2 ;
+		Tuple2<double[],long[]> histogramNotIdle = doubleDurationActivitiesNotIdle.histogram(nTranches);
+		StatCounter statNotIdle = doubleDurationActivitiesNotIdle.stats();
+		
+		//Exo 2 Pour les phases qui sont idle, la distribution de leur durée
+		JavaDoubleRDD doubleDurationActivitiesIdle = distFile
+			.filter(activity -> Integer.parseInt(activity.split(";")[4]) > 0)
+			.mapToDouble(activity -> Double.parseDouble(activity.split(";")[2]) );
+		
+		Tuple2<double[],long[]> histogramIdle = doubleDurationActivitiesIdle.histogram(nTranches);
+		StatCounter statIdle = doubleDurationActivitiesIdle.stats();
+
+		showDistribution("Exo 1 duration for not IDLE", statNotIdle, histogramNotIdle, nTranches);
+		showDistribution("Exo 2 duration for IDLE", statIdle, histogramIdle, nTranches);
+
+		//cachedActivitiesNotIdle.unpersist(false);
+		
+		context.close();
+	}
+
+	private static void showDistribution(String title, StatCounter statCounter, Tuple2<double[],long[]> histogram, int nTranches) {
+		System.out.println(title);
+		System.out.println("+---------------------------------+");
+		System.out.println("|\t Min \t|\t\t Max \t\t|\t\t Mean \t\t|");
+		System.out.println("+---------------------------------+");
+		System.out.println("|\t " + statCounter.min() + " \t|\t " + statCounter.max() + " \t|\t " + statCounter.mean() + " \t|");
+		System.out.println("+-------------------+---------------------------------+\n\n");
+
+		System.out.println("Histogram sur " + nTranches + " tranche(s).");
 		System.out.println("+------------------------+------------------------+");
 		System.out.println("|         Valeur         |        Nombre          |");
-		for(int i=0; i< nTranche; ++i)
+		for(int i=0; i< nTranches; ++i)
 		{
-			System.out.println("| " + d[i] + " \t | " + l[i] + "\t\t|");
+			System.out.println("| " + histogram._1()[i] + " \t | " + histogram._2()[i] + "\t\t|");
 			System.out.println("+------------------------+------------------------+");
 		}
-
-		double minNotIdle = statDurationActivitiesNotIdle.min();
-		double maxNotIdle = statDurationActivitiesNotIdle.max();
-		double meanNotIdle = statDurationActivitiesNotIdle.mean();
-		
-		/*//Exo 2 Pour les phases qui sont idle, la distribution de leur durée
-		JavaDoubleRDD doubleDurationActivitiesIdle = distFile
-			.filter(line -> !line.split(";")[0].equals("start") )
-			.filter(activity -> Integer.parseInt(activity.split(";")[4]) == 0)
-			.mapToDouble(activity -> Double.parseDouble(activity.split(";")[2]) );
-
-		StatCounter statDurationActivitiesIdle = doubleDurationActivitiesIdle.stats();
-
-		double minIdle = statDurationActivitiesIdle.min();
-		double maxIdle = statDurationActivitiesIdle.max();
-		double meanIdle = statDurationActivitiesIdle.mean();
-
-*/
-		//cachedActivitiesNotIdle.unpersist(false);
-		System.out.println("+-------------------+---------------------------------+");
-		System.out.println("|Pour les activités |\t Min \t|\t\t Max \t\t|\t\t Mean \t\t|");
-		System.out.println("--------------------+----------------------------------");
-		System.out.println("|     NotIdle       |\t " + minNotIdle + " \t|\t " + maxNotIdle + " \t|\t " + meanNotIdle + " \t|");
-		System.out.println("+-------------------+---------------------------------+");
-		//System.out.println("|      Idle         |\t " + minIdle + " \t|\t " + maxIdle + " \t|\t " + meanIdle + " \t|");*/
-		context.close();
 	}
 	
 }
