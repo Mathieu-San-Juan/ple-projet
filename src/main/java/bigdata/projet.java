@@ -2,8 +2,10 @@ package bigdata;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 
 import com.codahale.metrics.Histogram;
 
@@ -32,68 +34,88 @@ import org.apache.spark.api.java.JavaPairRDD;
 public class projet {
 
 	public static void main(String[] args) {
-		
+
 		SparkConf conf = new SparkConf().setAppName("TP Spark");
 		JavaSparkContext context = new JavaSparkContext(conf);
-		JavaRDD<String> distFile = context.textFile(args[0]).filter(line -> !line.split(";")[0].equals("start") );
-		
-		//Le nombre de tranches de notre histograme
-		int nTranches = 10;
+		JavaRDD<String> distFile = context.textFile(args[0]);
 
-		//EXERCICE 1 
+		// Le nombre de tranches de notre histograme
+		int nTranches = 5;
 
-		//Exo a Pour les phases qui ne sont pas idle, la distribution de leur durée	
-		JavaDoubleRDD durationNotIdle = distFile
-			.filter(activity -> Integer.parseInt(activity.split(";")[4]) > 0)
-			.mapToDouble(activity -> Double.parseDouble(activity.split(";")[2]) );
-		
-		Tuple2<double[],long[]> histogramNotIdle = durationNotIdle.histogram(nTranches);
-		StatCounter statNotIdle = durationNotIdle.stats();
-		
-		//Exo b Pour les phases qui sont idle, la distribution de leur durée
-		JavaDoubleRDD durationIdle = distFile
-			.filter(activity -> Integer.parseInt(activity.split(";")[4]) > 0)
-			.mapToDouble(activity -> Double.parseDouble(activity.split(";")[2]) );
-		
-		Tuple2<double[],long[]> histogramIdle = durationIdle.histogram(nTranches);
+		// EXERCICE 1
+		JavaRDD<String> notIdle = distFile.filter(activity -> (!activity.split(";")[0].equals("start") && !activity.split(";")[4].equals("0") ) );
+		StorageLevel sl = new StorageLevel();
+		notIdle.persist(sl);
+		// Exo a Pour les phases qui ne sont pas idle, la distribution de leur durée
+		JavaDoubleRDD durationNotIdle = notIdle
+				.mapToDouble(activity -> Double.parseDouble(activity.split(";")[2]));
+		durationNotIdle.persist(sl);
+
+		Tuple2<double[], long[]> histogramNotIdle = durationNotIdle.histogram(nTranches);
+//		StatCounter statNotIdle = durationNotIdle.stats();
+
+		// Exo b Pour les phases qui sont idle, la distribution de leur durée
+/*		JavaDoubleRDD durationIdle = distFile.filter(activity -> activity.split(";")[4].equals("0") )
+				.mapToDouble(activity -> Double.parseDouble(activity.split(";")[2])).cache();
+
+		Tuple2<double[], long[]> histogramIdle = durationIdle.histogram(nTranches);
 		StatCounter statIdle = durationIdle.stats();
+*/
+		// Exo c Pour les phases qui on un seul mottif d'acces, la distribution de leur
+		// durée, on utilise le notIdle puique le nPattern doit etre à 1, cela nous fait gagner du temps de lecture
+	/*	JavaPairRDD<String, Iterable<String>> groupBySinglePattern = notIdle
+				.filter(activity -> activity.split(";")[4].equals("1")).map(f -> {
+					String[] row = f.split(";");
+					return row[3] + ";" + row[2];
+				}).groupBy(activity -> activity.split(";")[0]);
+*/
+		// HashMap<String, Tuple2<double[],long[]>> histogramForPhase = new
+		// HashMap<String, Tuple2<double[],long[]>>();
+		//List<Tuple2<String, Iterable<String>>> list = groupBySinglePattern.collect();
+		//JavaPairRDD<String, Iterable<String>>[]
 
-		//Exo c Pour les phases qui on un seul mottif d'acces, la distribution de leur durée
-		Tuple2<double[],long[]> histogram1Pattern = distFile
-			.filter(activity -> Integer.parseInt(activity.split(";")[4]) == 1)
-			.mapToDouble(activity -> Double.parseDouble(activity.split(";")[2]) )
-			.histogram(nTranches);
-
-		showDistribution("Exo 1.a duration for not IDLE", statNotIdle, histogramNotIdle, nTranches);
-		showDistribution("Exo 1.b duration for IDLE", statIdle, histogramIdle, nTranches);
-		showDistribution("Exo 1.c duration for phases with only one pattern", null, histogram1Pattern, nTranches);
-
-		//cachedActivitiesNotIdle.unpersist(false);
+		/*
+		 * groupBySinglePattern.foreach(f -> { List<String> result = new
+		 * ArrayList<String>(); f._2.forEach(result::add); Tuple2<double[],long[]>
+		 * histoForAPattern=context.parallelize(result).mapToDouble(duration ->
+		 * Double.parseDouble(duration)).histogram(nTranches); });
+		 */
 		
+		//long notIdleC = notIdle.count();
+		//long idleC = durationIdle.count();
+		//System.out.println("Exo 1.a duration for not IDLE " + notIdleC);
+		//showStat(statNotIdle);
+		//showDistribution(histogramNotIdle, nTranches);
+		//System.out.println("Exo 1.b duration for IDLE "  + idleC);
+		//showStat(statIdle);
+		//showDistribution(histogramIdle, nTranches);
+
+		// cachedActivitiesNotIdle.unpersist(false);
+
 		context.close();
 	}
 
-	private static void showDistribution(String title, StatCounter statCounter, Tuple2<double[],long[]> histogram, int nTranches) {
-		System.out.println(title);
-		
-		if(statCounter != null){
-			System.out.println("+---------------------------------+");
-			System.out.println("|\t Min \t|\t\t Max \t\t|\t\t Mean \t\t|");
-			System.out.println("+---------------------------------+");
-			System.out.println("|\t " + statCounter.min() + " \t|\t " + statCounter.max() + " \t|\t " + statCounter.mean() + " \t|");
-			System.out.println("+-------------------+---------------------------------+\n\n");
+	private static void showStat(StatCounter statCounter) {
+		if (statCounter != null) {
+			System.out.println("+-------------------------------+-------------------------+\n\n");
+			System.out.println("| Min \t| Max \t\t\t| Mean \t\t\t|");
+			System.out.println("+-------------------------------+-------------------------+\n\n");
+			System.out.println("| " + statCounter.min() + " \t| " + statCounter.max() + " \t| "
+					+ statCounter.mean() + " \t|");
+					System.out.println("+-------------------------------+-------------------------+\n\n");
 		}
+	}
 
-		if(histogram != null){
+	private static void showDistribution(Tuple2<double[], long[]> histogram, int nTranches) {
+		if (histogram != null) {
 			System.out.println("Histogram sur " + nTranches + " tranche(s).");
 			System.out.println("+------------------------+------------------------+");
-			System.out.println("|         Valeur         |        Nombre          |");
-			for(int i=0; i< nTranches; ++i)
-			{
-				System.out.println("| " + histogram._1()[i] + " \t | " + histogram._2()[i] + "\t\t|");
-				System.out.println("+------------------------+------------------------+\n\n");
+			System.out.println("|\t Valeur  \t|\tNombre \t|");
+			for (int i = 0; i < nTranches; ++i) {
+				System.out.println("| " + histogram._1()[i] + " \t |\t " + histogram._2()[i] + "\t|");
+				System.out.println("+------------------------+--------------+");
 			}
 		}
 	}
-	
+
 }
