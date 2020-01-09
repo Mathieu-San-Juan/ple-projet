@@ -3,14 +3,21 @@ package bigdata;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
+
+import com.codahale.metrics.Histogram;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.OutputBuffer;
 import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaDoubleRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.Function;
 import org.apache.spark.storage.StorageLevel;
 import org.apache.spark.util.StatCounter;
 
@@ -30,12 +37,12 @@ import org.apache.spark.api.java.JavaPairRDD;
 //7- days
 //8- ndays
 
-public class Exo1 {
+public class Exo3 {
 
 	//EXERCICE 1
 	public static void main(String[] args) {
 
-		SparkConf conf = new SparkConf().setAppName("Exo 1");
+		SparkConf conf = new SparkConf().setAppName("Exo3");
 		JavaSparkContext context = new JavaSparkContext(conf);
 		JavaRDD<String> distFile = context.textFile(args[0]);
 
@@ -53,80 +60,26 @@ public class Exo1 {
 			System.exit(0); 
 		}
 
-		// EXERCICE A : Pour les phases qui NE SONT PAS idle, la distribution de leur durée.
+		// EXERCICE : La distribution de njobs. Attention : il ne faut pas y inclure les phases idle.
 		JavaRDD<String> notIdle = distFile.filter(activity -> (!activity.split(";")[0].equals("start") && !activity.split(";")[4].equals("0") ) );
+		JavaDoubleRDD nPatternNotIdle = notIdle.mapToDouble(activity -> Double.parseDouble(activity.split(";")[6]));
 		StorageLevel sl = new StorageLevel();
-		notIdle = notIdle.persist(sl);
-
-		JavaDoubleRDD durationNotIdle = notIdle.mapToDouble(activity -> Double.parseDouble(activity.split(";")[2]));
-		durationNotIdle = durationNotIdle.persist(sl);
+		nPatternNotIdle = nPatternNotIdle.persist(sl);
 
 		//Pour récuperer l'histogramme.
-		Tuple2<double[], long[]> histogramNotIdle = durationNotIdle.histogram(nTranches);
+		Tuple2<double[], long[]> nPatternNotIdleHistogram = nPatternNotIdle.histogram(nTranches);
 		//Pour récuperer le minimum, le maximum et la moyenne.
-		StatCounter statNotIdle = durationNotIdle.stats();
+		StatCounter nPatternNotIdleStat = nPatternNotIdle.stats();
 		//Pour récuperer médiane, premier et troisième quadrants.
-		double[] percentilesNotIdle = getPercentiles(durationNotIdle.map(v -> { return v; }), new double[]{0.25, 0.5, 0.75}, durationNotIdle.count(),  17);
-		synthetyzeToFile(context, "Exo1/distriDureeNotidle.txt", statNotIdle, percentilesNotIdle, histogramNotIdle, nTranches);
-		
-		
-		
-		// EXERCICE B : Pour les phases qui SONT idle, la distribution de leur durée.
-		JavaRDD<String> idle = distFile.filter(activity -> (!activity.split(";")[0].equals("start") && activity.split(";")[4].equals("0") ) );
+		double[] nPatternNotIdlePercentiles = getPercentiles(nPatternNotIdle.map(v -> { return v; }), new double[]{0.25, 0.5, 0.75}, nPatternNotIdle.count(),  17);
+		synthetyzeToFile(context, "Exo3/distriNJobs.txt", nPatternNotIdleStat, nPatternNotIdlePercentiles, nPatternNotIdleHistogram, nTranches);
 
-		JavaDoubleRDD durationIdle = idle.mapToDouble(activity -> Double.parseDouble(activity.split(";")[2]));
-		durationIdle = durationIdle.persist(sl);
-
-		//Pour récuperer l'histogramme.
-		Tuple2<double[], long[]> histogramIdle = durationIdle.histogram(nTranches);
-		//Pour récuperer le minimum, le maximum et la moyenne.
-		StatCounter statIdle = durationIdle.stats();
-		//Pour récuperer médiane, premier et troisième quadrants.
-		double[] percentilesIdle = getPercentiles(durationIdle.map(v -> { return v; }), new double[]{0.25, 0.5, 0.75}, durationIdle.count(),  17);
-		synthetyzeToFile(context, "Exo1/distriDureeIdle.txt", statIdle, percentilesIdle, histogramIdle, nTranches);
-
-		
-		
-		// EXERCICE C : Pour chaque motif d’accès (parmi les 22), la distribution de la durée des phases où ce motif apparaît seul (pas dans une liste avec des autres motifs).
-		JavaPairRDD<String, Iterable<String>> groupBySinglePattern = notIdle.filter(activity -> activity.split(";")[4].equals("1")).map(f -> 
-				{
-					String[] row = f.split(";");
-					return row[3] + ";" + row[2];
-				}).groupBy(activity -> activity.split(";")[0]);
-				
-		List<Tuple2<String, Iterable<String>>> groupBySinglePatternCollect = groupBySinglePattern.collect();
-
-		for(Tuple2<String, Iterable<String>> aPattern : groupBySinglePatternCollect) {
-			List<String> result = new ArrayList<String>(); 
-			aPattern._2.forEach(v -> {
-				result.add(v.split(";")[1]);
-			}); 
-			JavaRDD<String> aPatternDurationData = context.parallelize(result);
-			JavaDoubleRDD aPatternDuration = aPatternDurationData.mapToDouble(duration -> Double.parseDouble(duration));
-			aPatternDuration = aPatternDuration.persist(sl);
-			//Pour récuperer l'histogramme.
-			Tuple2<double[], long[]> aPatternDurationHistogram = aPatternDuration.histogram(nTranches);
-			//Pour récuperer le minimum, le maximum et la moyenne.
-			StatCounter aPatternDurationStat = aPatternDuration.stats();
-			//Pour récuperer médiane, premier et troisième quadrants.
-			double[] aPatternDurationPercentiles = getPercentiles(aPatternDuration.map(v -> { return v; }), new double[]{0.25, 0.5, 0.75}, aPatternDuration.count(),  17);
-			aPatternDuration.unpersist()
-			synthetyzeToFile(context, "Exo1/distriDureeOnePattern" + aPattern._1 + ".txt", aPatternDurationStat, aPatternDurationPercentiles, aPatternDurationHistogram, nTranches);
-		}
-
-
-		//Partie affichage des exo A et B
-		System.out.println("######  EXO 1 : A ######");
-		System.out.println("La distribution des durée pour les NotIdle");
-		showStat(statNotIdle);
-		showQ1MQ3(percentilesNotIdle[0], percentilesNotIdle[1], percentilesNotIdle[2]);
-		showHistogram(histogramNotIdle, nTranches);
-		
-		System.out.println("######  EXO 1 : B ######");
-		System.out.println("La distribution des durée pour les Idle");
-		showStat(statNotIdle);
-		showQ1MQ3(percentilesIdle[0], percentilesIdle[1], percentilesIdle[2]);
-		showHistogram(histogramIdle, nTranches);
+		//Partie affichage
+		System.out.println("######  EXO 3  ######");
+		System.out.println("La distribution de njobs");
+		showStat(nPatternNotIdleStat);
+		showQ1MQ3(nPatternNotIdlePercentiles[0], nPatternNotIdlePercentiles[1], nPatternNotIdlePercentiles[2]);
+		showHistogram(nPatternNotIdleHistogram, nTranches);
 
 		context.close();
 	}

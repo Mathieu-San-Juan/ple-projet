@@ -9,7 +9,6 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.JavaDoubleRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.storage.StorageLevel;
 import org.apache.spark.util.StatCounter;
@@ -30,14 +29,17 @@ import org.apache.spark.api.java.JavaPairRDD;
 //7- days
 //8- ndays
 
-public class Exo1 {
+public class Exo4 {
 
 	//EXERCICE 1
 	public static void main(String[] args) {
 
-		SparkConf conf = new SparkConf().setAppName("Exo 1");
+		SparkConf conf = new SparkConf().setAppName("Exo4");
 		JavaSparkContext context = new JavaSparkContext(conf);
 		JavaRDD<String> distFile = context.textFile(args[0]);
+
+		// Le nombre de job dans le top
+		int topN = 10;
 
 		// Le nombre de tranches de notre histograme, doit etre un entier strictement positif.
 		int nTranches = 5;
@@ -53,80 +55,73 @@ public class Exo1 {
 			System.exit(0); 
 		}
 
-		// EXERCICE A : Pour les phases qui NE SONT PAS idle, la distribution de leur durée.
-		JavaRDD<String> notIdle = distFile.filter(activity -> (!activity.split(";")[0].equals("start") && !activity.split(";")[4].equals("0") ) );
+		// EXERCICE 4 : La distribution de duréee par job.
+		JavaRDD<String> notIdle = distFile.filter(
+				activity -> (!activity.split(";")[0].equals("start") && !activity.split(";")[6].equals("0") )
+			).map(v -> 
+				{ 
+				String[] split = v.split(";");
+				return split[2] + ";" + split[5];
+
+				});
+
+		JavaRDD<String> notIdleDurationByJob = notIdle.flatMap((v)-> {
+			String[] split = v.split(";");
+			String[] jobs = split[1].split(",");
+			ArrayList<String> al = new ArrayList<String>();
+			for(String job : jobs)
+			 {
+				al.add(split[0]+";"+job);
+			 }
+			 return al.iterator();
+		});
+
+		JavaPairRDD<String, Iterable<String>> groupBySingleJob = notIdleDurationByJob.groupBy(activity -> activity.split(";")[1]);
+		
+		JavaPairRDD<String, Double> durationBySingleJob = groupBySingleJob.mapToPair( tuple -> {
+			double sum =0;
+			for(String duration : tuple._2)
+			{
+				sum+= Double.parseDouble(duration.split(";")[1]);
+			}
+			return new Tuple2<String,Double>(tuple._1, sum);
+		});
 		StorageLevel sl = new StorageLevel();
-		notIdle = notIdle.persist(sl);
-
-		JavaDoubleRDD durationNotIdle = notIdle.mapToDouble(activity -> Double.parseDouble(activity.split(";")[2]));
-		durationNotIdle = durationNotIdle.persist(sl);
-
-		//Pour récuperer l'histogramme.
-		Tuple2<double[], long[]> histogramNotIdle = durationNotIdle.histogram(nTranches);
-		//Pour récuperer le minimum, le maximum et la moyenne.
-		StatCounter statNotIdle = durationNotIdle.stats();
-		//Pour récuperer médiane, premier et troisième quadrants.
-		double[] percentilesNotIdle = getPercentiles(durationNotIdle.map(v -> { return v; }), new double[]{0.25, 0.5, 0.75}, durationNotIdle.count(),  17);
-		synthetyzeToFile(context, "Exo1/distriDureeNotidle.txt", statNotIdle, percentilesNotIdle, histogramNotIdle, nTranches);
+		durationBySingleJob = durationBySingleJob.persist(sl);
 		
-		
-		
-		// EXERCICE B : Pour les phases qui SONT idle, la distribution de leur durée.
-		JavaRDD<String> idle = distFile.filter(activity -> (!activity.split(";")[0].equals("start") && activity.split(";")[4].equals("0") ) );
-
-		JavaDoubleRDD durationIdle = idle.mapToDouble(activity -> Double.parseDouble(activity.split(";")[2]));
-		durationIdle = durationIdle.persist(sl);
-
-		//Pour récuperer l'histogramme.
-		Tuple2<double[], long[]> histogramIdle = durationIdle.histogram(nTranches);
-		//Pour récuperer le minimum, le maximum et la moyenne.
-		StatCounter statIdle = durationIdle.stats();
-		//Pour récuperer médiane, premier et troisième quadrants.
-		double[] percentilesIdle = getPercentiles(durationIdle.map(v -> { return v; }), new double[]{0.25, 0.5, 0.75}, durationIdle.count(),  17);
-		synthetyzeToFile(context, "Exo1/distriDureeIdle.txt", statIdle, percentilesIdle, histogramIdle, nTranches);
-
-		
-		
-		// EXERCICE C : Pour chaque motif d’accès (parmi les 22), la distribution de la durée des phases où ce motif apparaît seul (pas dans une liste avec des autres motifs).
-		JavaPairRDD<String, Iterable<String>> groupBySinglePattern = notIdle.filter(activity -> activity.split(";")[4].equals("1")).map(f -> 
-				{
-					String[] row = f.split(";");
-					return row[3] + ";" + row[2];
-				}).groupBy(activity -> activity.split(";")[0]);
-				
-		List<Tuple2<String, Iterable<String>>> groupBySinglePatternCollect = groupBySinglePattern.collect();
-
-		for(Tuple2<String, Iterable<String>> aPattern : groupBySinglePatternCollect) {
-			List<String> result = new ArrayList<String>(); 
-			aPattern._2.forEach(v -> {
-				result.add(v.split(";")[1]);
-			}); 
-			JavaRDD<String> aPatternDurationData = context.parallelize(result);
-			JavaDoubleRDD aPatternDuration = aPatternDurationData.mapToDouble(duration -> Double.parseDouble(duration));
-			aPatternDuration = aPatternDuration.persist(sl);
-			//Pour récuperer l'histogramme.
-			Tuple2<double[], long[]> aPatternDurationHistogram = aPatternDuration.histogram(nTranches);
-			//Pour récuperer le minimum, le maximum et la moyenne.
-			StatCounter aPatternDurationStat = aPatternDuration.stats();
-			//Pour récuperer médiane, premier et troisième quadrants.
-			double[] aPatternDurationPercentiles = getPercentiles(aPatternDuration.map(v -> { return v; }), new double[]{0.25, 0.5, 0.75}, aPatternDuration.count(),  17);
-			aPatternDuration.unpersist()
-			synthetyzeToFile(context, "Exo1/distriDureeOnePattern" + aPattern._1 + ".txt", aPatternDurationStat, aPatternDurationPercentiles, aPatternDurationHistogram, nTranches);
+		// EXERCICE B : Top 10 jobs en temps total d’accès au PFS.
+		List<Tuple2<String,Double>> topNJobDuration = durationBySingleJob.top(topN,((v, w) -> {return Double.compare(v._2, w._2); } ) );
+		try {
+			writeToLocal(context, "Exo4/topTenJobTotalDuree.txt", topNJobDuration.toString());
+		} catch(IOException ex){
+			System.err.println("############################################");
+			System.err.println("Problème avec l'écriture sur fichier en HDFS");
+			System.err.println("############################################");
 		}
 
+		// EXERCICE A : La distribution de duréee par job.
+		JavaDoubleRDD aJobDuration = durationBySingleJob.mapToDouble(tuple -> tuple._2);
+		aJobDuration = aJobDuration.persist(sl);
+
+		//Pour récuperer l'histogramme.
+		Tuple2<double[], long[]> aJobDurationHistogram = aJobDuration.histogram(nTranches);
+		//Pour récuperer le minimum, le maximum et la moyenne.
+		StatCounter aJobDurationStat = aJobDuration.stats();
+		//Pour récuperer médiane, premier et troisième quadrants.
+		double[] aJobDurationPercentiles = getPercentiles(aJobDuration.map(v -> { return v; }), new double[]{0.25, 0.5, 0.75}, aJobDuration.count(),  17);
+
+		synthetyzeToFile(context, "Exo4/distriDureeByJob.txt", aJobDurationStat, aJobDurationPercentiles, aJobDurationHistogram, nTranches);
 
 		//Partie affichage des exo A et B
-		System.out.println("######  EXO 1 : A ######");
-		System.out.println("La distribution des durée pour les NotIdle");
-		showStat(statNotIdle);
-		showQ1MQ3(percentilesNotIdle[0], percentilesNotIdle[1], percentilesNotIdle[2]);
-		showHistogram(histogramNotIdle, nTranches);
-		
-		System.out.println("######  EXO 1 : B ######");
-		System.out.println("La distribution des durée pour les Idle");
-		showStat(statNotIdle);
-		showQ1MQ3(percentilesIdle[0], percentilesIdle[1], percentilesIdle[2]);
-		showHistogram(histogramIdle, nTranches);
+		System.out.println("######  EXO 4 : A ######");
+		System.out.println("La distribution de duréee par job");
+		showStat(aJobDurationStat);
+		showQ1MQ3(aJobDurationPercentiles[0], aJobDurationPercentiles[1], aJobDurationPercentiles[2]);
+		showHistogram(aJobDurationHistogram, nTranches);
+
+		System.out.println("######  EXO 4 : B ######");
+		System.out.println("Top 10 jobs en temps total d’accès au PFS. : ");
+		System.out.println(topNJobDuration.toString());
 
 		context.close();
 	}
