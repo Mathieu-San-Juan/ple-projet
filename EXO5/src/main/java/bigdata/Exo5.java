@@ -25,20 +25,23 @@ import org.apache.spark.api.java.JavaDoubleRDD;
 
 public class Exo5 {
 
-	//EXERCICE 1
+	//EXERCICE 5
 	public static void main(String[] args) {
-
 		SparkConf conf = new SparkConf().setAppName("Exo5");
 		JavaSparkContext context = new JavaSparkContext(conf);
 		JavaRDD<String> distFile = context.textFile(args[0]);
 
 		// EXERCICE 5 : La somme des durée de phases idle 
-		JavaRDD<String> idle = distFile.filter(activity -> (!activity.split(";")[0].equals("start") && activity.split(";")[4].equals("0") ) );
+		JavaRDD<String> idle = distFile.filter(activity -> 
+		{
+			String[] split = activity.split(";");
+			return !split[0].equals("start") && split[4].equals("0");
+		} );
 
 		JavaDoubleRDD durationIdle = idle.mapToDouble(activity -> Double.parseDouble(activity.split(";")[2]));
-		StatCounter statIdle = durationIdle.stats();
+		Double totalDureeIdle = durationIdle.stats().sum();
 		try {
-			writeToLocal(context, "Exo5/totalDureeIdle.txt", String.valueOf(statIdle.sum()));
+			writeToLocal(context, "Exo5/totalDureeIdle.txt", String.valueOf(totalDureeIdle));
 		} catch(IOException ex){
 			System.err.println("############################################");
 			System.err.println("Problème avec l'écriture sur fichier en HDFS");
@@ -47,7 +50,7 @@ public class Exo5 {
 
 		//Partie affichage
 		System.out.println("######  EXO 5  ######");
-		System.out.println("La somme des durée de phases idle : " + String.valueOf(statIdle.sum()));
+		System.out.println("La somme des durée de phases idle : " + String.valueOf(totalDureeIdle));
 
 		context.close();
 	}

@@ -31,9 +31,8 @@ import org.apache.spark.api.java.JavaPairRDD;
 
 public class Exo4 {
 
-	//EXERCICE 1
+	//EXERCICE 4
 	public static void main(String[] args) {
-
 		SparkConf conf = new SparkConf().setAppName("Exo4");
 		JavaSparkContext context = new JavaSparkContext(conf);
 		JavaRDD<String> distFile = context.textFile(args[0]);
@@ -56,17 +55,19 @@ public class Exo4 {
 		}
 
 		// EXERCICE 4 : La distribution de duréee par job.
-		JavaRDD<String> notIdle = distFile.filter(
-				activity -> (!activity.split(";")[0].equals("start") && !activity.split(";")[6].equals("0") )
-			).map(v -> 
+		JavaRDD<String> notIdle = distFile.filter(activity -> 
+		{
+			String[] split = activity.split(";");
+			return !split[0].equals("start") && !split[4].equals("0");
+		} ).map(activity -> 
 				{ 
-				String[] split = v.split(";");
+				String[] split = activity.split(";");
 				return split[2] + ";" + split[5];
 
 				});
-
-		JavaRDD<String> notIdleDurationByJob = notIdle.flatMap((v)-> {
-			String[] split = v.split(";");
+		//On sépare les lignes avec plusieur patterns pour le group by qui va suivre, augmentation du nombre de ligne
+		JavaRDD<String> notIdleDurationByJob = notIdle.flatMap( activity -> {
+			String[] split = activity.split(";");
 			String[] jobs = split[1].split(",");
 			ArrayList<String> al = new ArrayList<String>();
 			for(String job : jobs)
@@ -75,10 +76,10 @@ public class Exo4 {
 			 }
 			 return al.iterator();
 		});
-
-		JavaPairRDD<String, Iterable<String>> groupBySingleJob = notIdleDurationByJob.groupBy(activity -> activity.split(";")[1]);
 		
-		JavaPairRDD<String, Double> durationBySingleJob = groupBySingleJob.mapToPair( tuple -> {
+		//On groupe par pattern
+		JavaPairRDD<String, Iterable<String>> groupBySingleJob = notIdleDurationByJob.groupBy(activity -> activity.split(";")[1]);
+	/*	JavaPairRDD<String, Double> durationBySingleJob = groupBySingleJob.mapToPair( tuple -> {
 			double sum =0;
 			for(String duration : tuple._2)
 			{
@@ -88,16 +89,6 @@ public class Exo4 {
 		});
 		StorageLevel sl = new StorageLevel();
 		durationBySingleJob = durationBySingleJob.persist(sl);
-		
-		// EXERCICE B : Top 10 jobs en temps total d’accès au PFS.
-		List<Tuple2<String,Double>> topNJobDuration = durationBySingleJob.top(topN,((v, w) -> {return Double.compare(v._2, w._2); } ) );
-		try {
-			writeToLocal(context, "Exo4/topTenJobTotalDuree.txt", topNJobDuration.toString());
-		} catch(IOException ex){
-			System.err.println("############################################");
-			System.err.println("Problème avec l'écriture sur fichier en HDFS");
-			System.err.println("############################################");
-		}
 
 		// EXERCICE A : La distribution de duréee par job.
 		JavaDoubleRDD aJobDuration = durationBySingleJob.mapToDouble(tuple -> tuple._2);
@@ -108,21 +99,32 @@ public class Exo4 {
 		//Pour récuperer le minimum, le maximum et la moyenne.
 		StatCounter aJobDurationStat = aJobDuration.stats();
 		//Pour récuperer médiane, premier et troisième quadrants.
-		double[] aJobDurationPercentiles = getPercentiles(aJobDuration.map(v -> { return v; }), new double[]{0.25, 0.5, 0.75}, aJobDuration.count(),  17);
+		double[] aJobDurationPercentiles = getPercentiles(aJobDuration.map(activity -> { return activity; }), new double[]{0.25, 0.5, 0.75}, aJobDuration.count(),  17);
 
 		synthetyzeToFile(context, "Exo4/distriDureeByJob.txt", aJobDurationStat, aJobDurationPercentiles, aJobDurationHistogram, nTranches);
-
+/*
+		// EXERCICE B : Top 10 jobs en temps total d’accès au PFS.
+		List<Tuple2<String,Double>> topNJobDuration = durationBySingleJob.top(topN,((v, w) -> {return Double.compare(v._2, w._2); } ) );
+		try {
+			writeToLocal(context, "Exo4/topTenJobTotalDuree.txt", topNJobDuration.toString());
+		} catch(IOException ex){
+			System.err.println("############################################");
+			System.err.println("Problème avec l'écriture sur fichier en HDFS");
+			System.err.println("############################################");
+		}
+*/
 		//Partie affichage des exo A et B
 		System.out.println("######  EXO 4 : A ######");
 		System.out.println("La distribution de duréee par job");
-		showStat(aJobDurationStat);
+		System.out.println("#################################################################################### " + groupBySingleJob.count());
+/*		showStat(aJobDurationStat);
 		showQ1MQ3(aJobDurationPercentiles[0], aJobDurationPercentiles[1], aJobDurationPercentiles[2]);
 		showHistogram(aJobDurationHistogram, nTranches);
 
-		System.out.println("######  EXO 4 : B ######");
+/*		System.out.println("######  EXO 4 : B ######");
 		System.out.println("Top 10 jobs en temps total d’accès au PFS. : ");
 		System.out.println(topNJobDuration.toString());
-
+*/
 		context.close();
 	}
 
@@ -152,13 +154,13 @@ public class Exo4 {
 	*/
 	private static void synthetyzeToFile(JavaSparkContext sparkContext, String filename, StatCounter statCounter, double[] percentiles, Tuple2<double[], long[]> histogram, int nTranches){
 
-		StringBuilder header= new StringBuilder("minimum, maximum, moyenne, médiane, premier quadrants, troisième quadrants");
+		StringBuilder header= new StringBuilder("minimum;maximum;moyenne;médiane;premier quadrants;troisième quadrants");
 		StringBuilder value = new StringBuilder(statCounter.min() + "," + statCounter.max() + "," + statCounter.mean() + "," + percentiles[1] + "," + percentiles[0] + "," + percentiles[2]);
 
 		if (histogram != null) {
 			for (int i = 0; i < nTranches; ++i) {
-				header.append(",hist T" + (i+1));
-				value.append(", [" + histogram._1()[i] + "," + histogram._2()[i] + "]");
+				header.append(";hist T" + (i+1));
+				value.append(";" + histogram._1()[i] + "," + histogram._2()[i]);
 			}
 		}
 		header.append("\n");

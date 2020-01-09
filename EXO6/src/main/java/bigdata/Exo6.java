@@ -30,32 +30,20 @@ import org.apache.spark.api.java.JavaPairRDD;
 
 public class Exo6 {
 
-	//EXERCICE 1
+	//EXERCICE 6
 	public static void main(String[] args) {
-
 		SparkConf conf = new SparkConf().setAppName("Exo6");
 		JavaSparkContext context = new JavaSparkContext(conf);
 		JavaRDD<String> distFile = context.textFile(args[0]);
 
 		int topN = 10;
-		// Le nombre de tranches de notre histograme, doit etre un entier strictement positif.
-		int nTranches = 5;
-		try {
-			if(args.length == 2 && args[1] != null && Integer.parseInt(args[1]) > 0) {
-				nTranches = Integer.parseInt(args[1]);
-				System.err.println(Integer.parseInt(args[1]));
-			}
-		} catch(Exception ex) {
-			System.err.println("#######################################################################################################");
-			System.err.println("Erreur : Le 2nd paramétre doit être un nombre entier positif pour le nombre de tranches des histogrames");
-			System.err.println("#######################################################################################################");
-			System.exit(0); 
-		}
 
 		// EXERCICE A : Pourcentage du temps total de phases où chaque motif a été observé seul (qu’un seul motif pendant la phase), ou concurrent à des autres.
-		JavaRDD<String> notIdle = distFile.filter(
-				activity -> (!activity.split(";")[0].equals("start") && !activity.split(";")[6].equals("0") )
-			).map(v -> 
+		JavaRDD<String> notIdle = distFile.filter(activity -> 
+			{
+				String[] split = activity.split(";");
+				return !split[0].equals("start") && !split[4].equals("0");
+			} ).map(v -> 
 				{ 
 				String[] split = v.split(";");
 				return split[2] + ";" + split[3];
@@ -84,7 +72,8 @@ public class Exo6 {
 			}
 			return sum;
 		});
-		//Pour récuperer le minimum, le maximum et la moyenne.
+
+		//Pour récuperer la somme total afin de calculer les pourcentage plus tard.
 		Double totalSumOfDuration = aPatternDuration.stats().sum();
 
 		JavaPairRDD<String, Double> durationPercentByPattern = groupBySinglePattern.mapToPair( tuple -> {

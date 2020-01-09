@@ -39,7 +39,7 @@ import org.apache.spark.api.java.JavaPairRDD;
 
 public class Exo3 {
 
-	//EXERCICE 1
+	//EXERCICE 3
 	public static void main(String[] args) {
 
 		SparkConf conf = new SparkConf().setAppName("Exo3");
@@ -61,7 +61,12 @@ public class Exo3 {
 		}
 
 		// EXERCICE : La distribution de njobs. Attention : il ne faut pas y inclure les phases idle.
-		JavaRDD<String> notIdle = distFile.filter(activity -> (!activity.split(";")[0].equals("start") && !activity.split(";")[4].equals("0") ) );
+		JavaRDD<String> notIdle = distFile.filter(activity -> 
+		{
+			String[] split = activity.split(";");
+			return !split[0].equals("start") && !split[4].equals("0");
+		} );
+		//On ne garde que les durées pour pouvoir opérer la distribution dessus.
 		JavaDoubleRDD nPatternNotIdle = notIdle.mapToDouble(activity -> Double.parseDouble(activity.split(";")[6]));
 		StorageLevel sl = new StorageLevel();
 		nPatternNotIdle = nPatternNotIdle.persist(sl);
@@ -71,7 +76,7 @@ public class Exo3 {
 		//Pour récuperer le minimum, le maximum et la moyenne.
 		StatCounter nPatternNotIdleStat = nPatternNotIdle.stats();
 		//Pour récuperer médiane, premier et troisième quadrants.
-		double[] nPatternNotIdlePercentiles = getPercentiles(nPatternNotIdle.map(v -> { return v; }), new double[]{0.25, 0.5, 0.75}, nPatternNotIdle.count(),  17);
+		double[] nPatternNotIdlePercentiles = getPercentiles(nPatternNotIdle.map(activity -> { return activity; }), new double[]{0.25, 0.5, 0.75}, nPatternNotIdle.count(),  17);
 		synthetyzeToFile(context, "Exo3/distriNJobs.txt", nPatternNotIdleStat, nPatternNotIdlePercentiles, nPatternNotIdleHistogram, nTranches);
 
 		//Partie affichage
@@ -110,13 +115,13 @@ public class Exo3 {
 	*/
 	private static void synthetyzeToFile(JavaSparkContext sparkContext, String filename, StatCounter statCounter, double[] percentiles, Tuple2<double[], long[]> histogram, int nTranches){
 
-		StringBuilder header= new StringBuilder("minimum, maximum, moyenne, médiane, premier quadrants, troisième quadrants");
+		StringBuilder header= new StringBuilder("minimum;maximum;moyenne;médiane;premier quadrants;troisième quadrants");
 		StringBuilder value = new StringBuilder(statCounter.min() + "," + statCounter.max() + "," + statCounter.mean() + "," + percentiles[1] + "," + percentiles[0] + "," + percentiles[2]);
 
 		if (histogram != null) {
 			for (int i = 0; i < nTranches; ++i) {
-				header.append(",hist T" + (i+1));
-				value.append(", [" + histogram._1()[i] + "," + histogram._2()[i] + "]");
+				header.append(";hist T" + (i+1));
+				value.append(";" + histogram._1()[i] + "," + histogram._2()[i]);
 			}
 		}
 		header.append("\n");
@@ -129,7 +134,6 @@ public class Exo3 {
 			System.err.println("############################################");
 		}
 	}
-
 	/*
      * @brief Permet d'afficher le min, max et la moyenne recupérer par un StatCounter.
 	 * @param statCounter qui contient les statistiques Spark collecteé sur un JavaRDD.

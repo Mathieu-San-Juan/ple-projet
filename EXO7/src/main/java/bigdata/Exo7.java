@@ -18,18 +18,56 @@ import org.apache.spark.api.java.JavaRDD;
 
 public class Exo7 {
 
-	//EXERCICE 1
+	//EXERCICE 7
 	public static void main(String[] args) {
 
 		SparkConf conf = new SparkConf().setAppName("Exo7");
 		JavaSparkContext context = new JavaSparkContext(conf);
 		JavaRDD<String> distFile = context.textFile(args[0]);
 
-		String[] patterns = {"0","1","5","6"};
+		String[] patterns = {"0","1","2","3"};
+
+		if(args.length != 1 && args.length != 5) {
+			System.err.println("#################################################################################################################");
+			System.err.println("Erreur : Le nombre d'argument est erroné. En permier le chemin, puis soit 4 pattern soit rien.");
+			System.err.println("#################################################################################################################");
+			System.exit(0); 
+		}
+
+		try {
+			if(args.length == 5 && args[1] != null && Integer.parseInt(args[1]) >= 0
+					&& args[2] != null && Integer.parseInt(args[2]) >= 0
+					&& args[3] != null && Integer.parseInt(args[3]) >= 0
+					&& args[4] != null && Integer.parseInt(args[4]) >= 0) {
+				patterns[0] = args[1];
+				patterns[1] = args[2];
+				patterns[2] = args[3];
+				patterns[3] = args[4];
+			}
+		} catch(Exception ex) {
+			System.err.println("#################################################################################################################");
+			System.err.println("Erreur : Le 2eme, 3eme, 4eme et 5eme paramétres doient être des nombres entier positif pour le 4 pattern étudiés.");
+			System.err.println("#################################################################################################################");
+			System.exit(0); 
+		}
+
+		if(patterns[0] == patterns[1] || patterns[0] == patterns[2] || patterns[0] == patterns[3]
+				|| patterns[1] == patterns[2] || patterns[1] == patterns[3] || patterns[2] == patterns[3]) 
+		{
+			System.err.println("#################################################################################################################");
+			System.err.println("Erreur : Les 4 pattern étudiés doivent être différent, aucun doublons accepté.");
+			System.err.println("#################################################################################################################");
+			System.exit(0); 
+		}
+
 
 		// EXERCICE 7 : Proposez et implémentez une solution permettant d’obtenir toutes les plages horaires comportant 4 patterns donnés.
 		JavaRDD<String> plageHoraireFilterByPatternList = distFile.filter(
-				activity -> (!activity.split(";")[0].equals("start") && !activity.split(";")[6].equals("0") && Integer.valueOf( activity.split(";")[4])>=patterns.length )
+				activity -> 
+				{
+					String[] split = activity.split(";");
+					return (!split[0].equals("start") && !split[6].equals("0") && Integer.valueOf(split[4])>=patterns.length);
+				}
 			).filter(v -> 
 				{
 					return Arrays.asList(v.split(";")[3].split(",")).containsAll(Arrays.asList(patterns));
@@ -41,7 +79,6 @@ public class Exo7 {
 		
 		plageHoraireFilterByPatternList.saveAsTextFile("Exo7/plageHoraireFilterByPatternList.txt");
 
-	
 		context.close();
 	}
 }

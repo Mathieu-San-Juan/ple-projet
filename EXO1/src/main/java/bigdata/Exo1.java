@@ -34,7 +34,6 @@ public class Exo1 {
 
 	//EXERCICE 1
 	public static void main(String[] args) {
-
 		SparkConf conf = new SparkConf().setAppName("Exo 1");
 		JavaSparkContext context = new JavaSparkContext(conf);
 		JavaRDD<String> distFile = context.textFile(args[0]);
@@ -54,7 +53,11 @@ public class Exo1 {
 		}
 
 		// EXERCICE A : Pour les phases qui NE SONT PAS idle, la distribution de leur durée.
-		JavaRDD<String> notIdle = distFile.filter(activity -> (!activity.split(";")[0].equals("start") && !activity.split(";")[4].equals("0") ) );
+		JavaRDD<String> notIdle = distFile.filter(activity -> 
+			{
+				String[] split = activity.split(";");
+				return !split[0].equals("start") && !split[4].equals("0");
+			} );
 		StorageLevel sl = new StorageLevel();
 		notIdle = notIdle.persist(sl);
 
@@ -66,13 +69,16 @@ public class Exo1 {
 		//Pour récuperer le minimum, le maximum et la moyenne.
 		StatCounter statNotIdle = durationNotIdle.stats();
 		//Pour récuperer médiane, premier et troisième quadrants.
-		double[] percentilesNotIdle = getPercentiles(durationNotIdle.map(v -> { return v; }), new double[]{0.25, 0.5, 0.75}, durationNotIdle.count(),  17);
-		synthetyzeToFile(context, "Exo1/distriDureeNotidle.txt", statNotIdle, percentilesNotIdle, histogramNotIdle, nTranches);
-		
-		
-		
+		double[] percentilesNotIdle = getPercentiles(durationNotIdle.map(activity -> { return activity; }), new double[]{0.25, 0.5, 0.75}, durationNotIdle.count(),  17);
+		synthetyzeToFile(context, "Exo1/distriDureeNotIdle.txt", statNotIdle, percentilesNotIdle, histogramNotIdle, nTranches);
+		durationNotIdle.unpersist();
+			
 		// EXERCICE B : Pour les phases qui SONT idle, la distribution de leur durée.
-		JavaRDD<String> idle = distFile.filter(activity -> (!activity.split(";")[0].equals("start") && activity.split(";")[4].equals("0") ) );
+		JavaRDD<String> idle = distFile.filter(activity -> 
+			{
+				String[] split = activity.split(";");
+				return !split[0].equals("start") && split[4].equals("0");
+			} );
 
 		JavaDoubleRDD durationIdle = idle.mapToDouble(activity -> Double.parseDouble(activity.split(";")[2]));
 		durationIdle = durationIdle.persist(sl);
@@ -82,24 +88,24 @@ public class Exo1 {
 		//Pour récuperer le minimum, le maximum et la moyenne.
 		StatCounter statIdle = durationIdle.stats();
 		//Pour récuperer médiane, premier et troisième quadrants.
-		double[] percentilesIdle = getPercentiles(durationIdle.map(v -> { return v; }), new double[]{0.25, 0.5, 0.75}, durationIdle.count(),  17);
+		double[] percentilesIdle = getPercentiles(durationIdle.map(activity -> { return activity; }), new double[]{0.25, 0.5, 0.75}, durationIdle.count(),  17);
 		synthetyzeToFile(context, "Exo1/distriDureeIdle.txt", statIdle, percentilesIdle, histogramIdle, nTranches);
-
-		
+		durationIdle.unpersist();
 		
 		// EXERCICE C : Pour chaque motif d’accès (parmi les 22), la distribution de la durée des phases où ce motif apparaît seul (pas dans une liste avec des autres motifs).
-		JavaPairRDD<String, Iterable<String>> groupBySinglePattern = notIdle.filter(activity -> activity.split(";")[4].equals("1")).map(f -> 
+		JavaPairRDD<String, Iterable<String>> groupBySinglePattern = notIdle.filter(activity -> activity.split(";")[4].equals("1")).map(activity -> 
 				{
-					String[] row = f.split(";");
+					String[] row = activity.split(";");
 					return row[3] + ";" + row[2];
 				}).groupBy(activity -> activity.split(";")[0]);
-				
+		notIdle.unpersist();	
+		
 		List<Tuple2<String, Iterable<String>>> groupBySinglePatternCollect = groupBySinglePattern.collect();
 
 		for(Tuple2<String, Iterable<String>> aPattern : groupBySinglePatternCollect) {
 			List<String> result = new ArrayList<String>(); 
-			aPattern._2.forEach(v -> {
-				result.add(v.split(";")[1]);
+			aPattern._2.forEach(activity -> {
+				result.add(activity.split(";")[1]);
 			}); 
 			JavaRDD<String> aPatternDurationData = context.parallelize(result);
 			JavaDoubleRDD aPatternDuration = aPatternDurationData.mapToDouble(duration -> Double.parseDouble(duration));
@@ -109,11 +115,10 @@ public class Exo1 {
 			//Pour récuperer le minimum, le maximum et la moyenne.
 			StatCounter aPatternDurationStat = aPatternDuration.stats();
 			//Pour récuperer médiane, premier et troisième quadrants.
-			double[] aPatternDurationPercentiles = getPercentiles(aPatternDuration.map(v -> { return v; }), new double[]{0.25, 0.5, 0.75}, aPatternDuration.count(),  17);
-			aPatternDuration.unpersist()
+			double[] aPatternDurationPercentiles = getPercentiles(aPatternDuration.map(activity -> { return activity; }), new double[]{0.25, 0.5, 0.75}, aPatternDuration.count(),  17);
+			aPatternDuration.unpersist();
 			synthetyzeToFile(context, "Exo1/distriDureeOnePattern" + aPattern._1 + ".txt", aPatternDurationStat, aPatternDurationPercentiles, aPatternDurationHistogram, nTranches);
 		}
-
 
 		//Partie affichage des exo A et B
 		System.out.println("######  EXO 1 : A ######");
@@ -124,7 +129,7 @@ public class Exo1 {
 		
 		System.out.println("######  EXO 1 : B ######");
 		System.out.println("La distribution des durée pour les Idle");
-		showStat(statNotIdle);
+		showStat(statIdle);
 		showQ1MQ3(percentilesIdle[0], percentilesIdle[1], percentilesIdle[2]);
 		showHistogram(histogramIdle, nTranches);
 
@@ -157,13 +162,13 @@ public class Exo1 {
 	*/
 	private static void synthetyzeToFile(JavaSparkContext sparkContext, String filename, StatCounter statCounter, double[] percentiles, Tuple2<double[], long[]> histogram, int nTranches){
 
-		StringBuilder header= new StringBuilder("minimum, maximum, moyenne, médiane, premier quadrants, troisième quadrants");
+		StringBuilder header= new StringBuilder("minimum;maximum;moyenne;médiane;premier quadrants;troisième quadrants");
 		StringBuilder value = new StringBuilder(statCounter.min() + "," + statCounter.max() + "," + statCounter.mean() + "," + percentiles[1] + "," + percentiles[0] + "," + percentiles[2]);
 
 		if (histogram != null) {
 			for (int i = 0; i < nTranches; ++i) {
-				header.append(",hist T" + (i+1));
-				value.append(", [" + histogram._1()[i] + "," + histogram._2()[i] + "]");
+				header.append(";hist T" + (i+1));
+				value.append(";" + histogram._1()[i] + "," + histogram._2()[i]);
 			}
 		}
 		header.append("\n");
