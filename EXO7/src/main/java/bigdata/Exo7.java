@@ -28,9 +28,9 @@ public class Exo7 {
 		String[] patterns = {"0","1","2","3"};
 
 		if(args.length != 1 && args.length != 5) {
-			System.err.println("#################################################################################################################");
-			System.err.println("Erreur : Le nombre d'argument est erroné. En permier le chemin, puis soit 4 pattern soit rien.");
-			System.err.println("#################################################################################################################");
+			System.err.println("#############################################################################################################");
+			System.err.println("Erreur : Le nombre d'argument est erroné. En permier le chemin (déjà rempli), puis soit 4 pattern soit rien.");
+			System.err.println("#############################################################################################################");
 			System.exit(0); 
 		}
 
@@ -66,18 +66,15 @@ public class Exo7 {
 				activity -> 
 				{
 					String[] split = activity.split(";");
-					return (!split[0].equals("start") && !split[6].equals("0") && Integer.valueOf(split[4])>=patterns.length);
+					return (!split[0].equals("start") && Integer.valueOf(split[4])>=patterns.length) && Arrays.asList(split[3].split(",")).containsAll(Arrays.asList(patterns));
 				}
-			).filter(v -> 
-				{
-					return Arrays.asList(v.split(";")[3].split(",")).containsAll(Arrays.asList(patterns));
-				}
-				).map(v -> { 
-					String[] split= v.split(";");
-					return split[0] + ";" + split[1];
+			).map(
+				activity -> { 
+					String[] split= activity.split(";");
+					return split[0] + ";" + split[1] + ";" + split[3];
 				});
-		
-		plageHoraireFilterByPatternList.saveAsTextFile("Exo7/plageHoraireFilterByPatternList.txt");
+
+		plageHoraireFilterByPatternList.saveAsTextFile("Exo7/plageHoraireByPattern");
 
 		context.close();
 	}

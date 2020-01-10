@@ -93,21 +93,23 @@ public class Exo1 {
 		durationIdle.unpersist();
 		
 		// EXERCICE C : Pour chaque motif d’accès (parmi les 22), la distribution de la durée des phases où ce motif apparaît seul (pas dans une liste avec des autres motifs).
-		JavaPairRDD<String, Iterable<String>> groupBySinglePattern = notIdle.filter(activity -> activity.split(";")[4].equals("1")).map(activity -> 
+/*		JavaPairRDD<String, Iterable<String>> groupBySinglePattern = notIdle.filter(activity -> activity.split(";")[4].equals("1")).map(activity -> 
 				{
 					String[] row = activity.split(";");
 					return row[3] + ";" + row[2];
 				}).groupBy(activity -> activity.split(";")[0]);
-		notIdle.unpersist();	
-		
-		List<Tuple2<String, Iterable<String>>> groupBySinglePatternCollect = groupBySinglePattern.collect();
+		notIdle.unpersist();
+		groupBySinglePattern.persist(sl);
 
-		for(Tuple2<String, Iterable<String>> aPattern : groupBySinglePatternCollect) {
-			List<String> result = new ArrayList<String>(); 
-			aPattern._2.forEach(activity -> {
-				result.add(activity.split(";")[1]);
-			}); 
-			JavaRDD<String> aPatternDurationData = context.parallelize(result);
+		List<String> singlePatternList = groupBySinglePattern.map( tuple -> (tuple._1) ).collect();
+		for(String aPatternId : singlePatternList) {
+			JavaRDD<String> aPatternDurationData = groupBySinglePattern.filter(tuple -> ( tuple._1.equals(aPatternId) ) ).flatMap( tuple -> {
+				ArrayList<String> al = new ArrayList<String>();
+				tuple._2.forEach(activity -> {
+					al.add(activity.split(";")[1]);
+				});
+				return al.iterator();
+			});
 			JavaDoubleRDD aPatternDuration = aPatternDurationData.mapToDouble(duration -> Double.parseDouble(duration));
 			aPatternDuration = aPatternDuration.persist(sl);
 			//Pour récuperer l'histogramme.
@@ -117,9 +119,10 @@ public class Exo1 {
 			//Pour récuperer médiane, premier et troisième quadrants.
 			double[] aPatternDurationPercentiles = getPercentiles(aPatternDuration.map(activity -> { return activity; }), new double[]{0.25, 0.5, 0.75}, aPatternDuration.count(),  17);
 			aPatternDuration.unpersist();
-			synthetyzeToFile(context, "Exo1/distriDureeOnePattern" + aPattern._1 + ".txt", aPatternDurationStat, aPatternDurationPercentiles, aPatternDurationHistogram, nTranches);
+			synthetyzeToFile(context, "Exo1/distriDureeOnePattern" + aPatternId + ".txt", aPatternDurationStat, aPatternDurationPercentiles, aPatternDurationHistogram, nTranches);
 		}
-
+		groupBySinglePattern.unpersist();
+*/
 		//Partie affichage des exo A et B
 		System.out.println("######  EXO 1 : A ######");
 		System.out.println("La distribution des durée pour les NotIdle");
@@ -163,7 +166,7 @@ public class Exo1 {
 	private static void synthetyzeToFile(JavaSparkContext sparkContext, String filename, StatCounter statCounter, double[] percentiles, Tuple2<double[], long[]> histogram, int nTranches){
 
 		StringBuilder header= new StringBuilder("minimum;maximum;moyenne;médiane;premier quadrants;troisième quadrants");
-		StringBuilder value = new StringBuilder(statCounter.min() + "," + statCounter.max() + "," + statCounter.mean() + "," + percentiles[1] + "," + percentiles[0] + "," + percentiles[2]);
+		StringBuilder value = new StringBuilder(statCounter.min() + ";" + statCounter.max() + ";" + statCounter.mean() + ";" + percentiles[1] + ";" + percentiles[0] + ";" + percentiles[2]);
 
 		if (histogram != null) {
 			for (int i = 0; i < nTranches; ++i) {

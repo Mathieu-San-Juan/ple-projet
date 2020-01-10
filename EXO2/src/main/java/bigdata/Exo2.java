@@ -106,7 +106,7 @@ public class Exo2 {
 	private static void synthetyzeToFile(JavaSparkContext sparkContext, String filename, StatCounter statCounter, double[] percentiles, Tuple2<double[], long[]> histogram, int nTranches){
 
 		StringBuilder header= new StringBuilder("minimum;maximum;moyenne;médiane;premier quadrants;troisième quadrants");
-		StringBuilder value = new StringBuilder(statCounter.min() + "," + statCounter.max() + "," + statCounter.mean() + "," + percentiles[1] + "," + percentiles[0] + "," + percentiles[2]);
+		StringBuilder value = new StringBuilder(statCounter.min() + ";" + statCounter.max() + ";" + statCounter.mean() + ";" + percentiles[1] + ";" + percentiles[0] + ";" + percentiles[2]);
 
 		if (histogram != null) {
 			for (int i = 0; i < nTranches; ++i) {

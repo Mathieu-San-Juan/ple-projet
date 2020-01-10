@@ -78,8 +78,8 @@ public class Exo4 {
 		});
 		
 		//On groupe par pattern
-		JavaPairRDD<String, Iterable<String>> groupBySingleJob = notIdleDurationByJob.groupBy(activity -> activity.split(";")[1]);
-	/*	JavaPairRDD<String, Double> durationBySingleJob = groupBySingleJob.mapToPair( tuple -> {
+		//JavaPairRDD<String, Iterable<String>> groupBySingleJob = notIdleDurationByJob.groupBy(activity -> activity.split(";")[1]);
+		JavaPairRDD<String, Double> durationBySingleJob = notIdleDurationByJob.groupBy(activity -> activity.split(";")[1]).mapToPair( tuple -> {
 			double sum =0;
 			for(String duration : tuple._2)
 			{
@@ -102,7 +102,7 @@ public class Exo4 {
 		double[] aJobDurationPercentiles = getPercentiles(aJobDuration.map(activity -> { return activity; }), new double[]{0.25, 0.5, 0.75}, aJobDuration.count(),  17);
 
 		synthetyzeToFile(context, "Exo4/distriDureeByJob.txt", aJobDurationStat, aJobDurationPercentiles, aJobDurationHistogram, nTranches);
-/*
+
 		// EXERCICE B : Top 10 jobs en temps total d’accès au PFS.
 		List<Tuple2<String,Double>> topNJobDuration = durationBySingleJob.top(topN,((v, w) -> {return Double.compare(v._2, w._2); } ) );
 		try {
@@ -112,12 +112,11 @@ public class Exo4 {
 			System.err.println("Problème avec l'écriture sur fichier en HDFS");
 			System.err.println("############################################");
 		}
-*/
+
 		//Partie affichage des exo A et B
 		System.out.println("######  EXO 4 : A ######");
 		System.out.println("La distribution de duréee par job");
-		System.out.println("#################################################################################### " + groupBySingleJob.count());
-/*		showStat(aJobDurationStat);
+		showStat(aJobDurationStat);
 		showQ1MQ3(aJobDurationPercentiles[0], aJobDurationPercentiles[1], aJobDurationPercentiles[2]);
 		showHistogram(aJobDurationHistogram, nTranches);
 
@@ -155,7 +154,7 @@ public class Exo4 {
 	private static void synthetyzeToFile(JavaSparkContext sparkContext, String filename, StatCounter statCounter, double[] percentiles, Tuple2<double[], long[]> histogram, int nTranches){
 
 		StringBuilder header= new StringBuilder("minimum;maximum;moyenne;médiane;premier quadrants;troisième quadrants");
-		StringBuilder value = new StringBuilder(statCounter.min() + "," + statCounter.max() + "," + statCounter.mean() + "," + percentiles[1] + "," + percentiles[0] + "," + percentiles[2]);
+		StringBuilder value = new StringBuilder(statCounter.min() + ";" + statCounter.max() + ";" + statCounter.mean() + ";" + percentiles[1] + ";" + percentiles[0] + ";" + percentiles[2]);
 
 		if (histogram != null) {
 			for (int i = 0; i < nTranches; ++i) {
