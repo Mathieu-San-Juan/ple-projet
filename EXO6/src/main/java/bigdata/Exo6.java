@@ -34,6 +34,7 @@ public class Exo6 {
 	public static void main(String[] args) {
 		SparkConf conf = new SparkConf().setAppName("Exo6");
 		JavaSparkContext context = new JavaSparkContext(conf);
+		context.setLogLevel("WARN");
 		JavaRDD<String> distFile = context.textFile(args[0]);
 
 		int topN = 10;
@@ -49,7 +50,7 @@ public class Exo6 {
 				return split[2] + ";" + split[3];
 
 				});
-
+		//on sépare les patterns
 		JavaRDD<String> notIdleDurationByPattern = notIdle.flatMap((v)-> {
 			String[] split = v.split(";");
 			String[] patterns = split[1].split(",");
@@ -61,7 +62,7 @@ public class Exo6 {
 			 return al.iterator();
 		});
 
-		JavaPairRDD<String, Iterable<String>> groupBySinglePattern = notIdleDurationByPattern.groupBy(activity -> activity.split(";")[1]);
+		JavaPairRDD<String, Iterable<String>> groupBySinglePattern = notIdleDurationByPattern.groupBy(activity -> activity.split(";")[1]).repartition(22);
 		
 		JavaDoubleRDD aPatternDuration = groupBySinglePattern.mapToDouble(tuple -> 
 		{
@@ -82,19 +83,20 @@ public class Exo6 {
 			{
 				sum+= Double.parseDouble(duration.split(";")[1]);
 			}
-			return new Tuple2<String,Double>(tuple._1, (Double)(sum / totalSumOfDuration));
+			return new Tuple2<String,Double>(tuple._1, (Double)(sum / totalSumOfDuration)*100);
 		});
 		StorageLevel sl = new StorageLevel();
-		durationPercentByPattern = durationPercentByPattern.persist(sl);
+		//durationPercentByPattern = durationPercentByPattern;
+		durationPercentByPattern.saveAsTextFile("EXO6/durationPercent/");
 		
-		try {	
+		/*try {	
 			writeToLocal(context, "Exo6/durationPercentByPattern.txt", durationPercentByPattern.toString());
 		} catch(IOException ex){
 			System.err.println("############################################");
 			System.err.println("Problème avec l'écriture sur fichier en HDFS");
 			System.err.println("############################################");
-		}
-
+		}*/
+/*
 		// EXERCICE B : Top 10 pattern en représentativité.
 		List<Tuple2<String,Double>> topNPatternPercentDuration = durationPercentByPattern.top(topN,((v, w) -> {return Double.compare(v._2, w._2); } ) );
 		try {
@@ -104,14 +106,15 @@ public class Exo6 {
 			System.err.println("Problème avec l'écriture sur fichier en HDFS");
 			System.err.println("############################################");
 		}
-
+*/
 		//Partie affichage des exo A et B
 		System.out.println("######  EXO 6 : A ######");
 		System.out.println("Pourcentage du temps total de phases où chaque motif a été observé seul ou concurrent");
-		System.out.println(durationPercentByPattern.toString());
+		durationPercentByPattern.foreach(f -> System.out.println(f._1()+"  -  " + f._2()));
+		//System.out.println(durationPercentByPattern.toString());
 		System.out.println("######  EXO 6 : B ######");
-		System.out.println("Top 10 pattern : ");
-		System.out.println(topNPatternPercentDuration.toString());
+	//	System.out.println("Top 10 pattern : ");
+	//	System.out.println(topNPatternPercentDuration.toString());
 
 		context.close();
 	}
