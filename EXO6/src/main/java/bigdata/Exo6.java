@@ -62,7 +62,7 @@ public class Exo6 {
 			 return al.iterator();
 		});
 
-		JavaPairRDD<String, Iterable<String>> groupBySinglePattern = notIdleDurationByPattern.groupBy(activity -> activity.split(";")[1]).repartition(22);
+		JavaPairRDD<String, Iterable<String>> groupBySinglePattern = notIdleDurationByPattern.groupBy(activity -> activity.split(";")[1]);
 		
 		JavaDoubleRDD aPatternDuration = groupBySinglePattern.mapToDouble(tuple -> 
 		{

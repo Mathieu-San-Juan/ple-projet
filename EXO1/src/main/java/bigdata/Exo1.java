@@ -93,7 +93,7 @@ public class Exo1 {
 		durationIdle.unpersist();
 		
 		// EXERCICE C : Pour chaque motif d’accès (parmi les 22), la distribution de la durée des phases où ce motif apparaît seul (pas dans une liste avec des autres motifs).
-/*		JavaPairRDD<String, Iterable<String>> groupBySinglePattern = notIdle.filter(activity -> activity.split(";")[4].equals("1")).map(activity -> 
+		JavaPairRDD<String, Iterable<String>> groupBySinglePattern = notIdle.filter(activity -> activity.split(";")[4].equals("1")).map(activity -> 
 				{
 					String[] row = activity.split(";");
 					return row[3] + ";" + row[2];
@@ -122,7 +122,7 @@ public class Exo1 {
 			synthetyzeToFile(context, "Exo1/distriDureeOnePattern" + aPatternId + ".txt", aPatternDurationStat, aPatternDurationPercentiles, aPatternDurationHistogram, nTranches);
 		}
 		groupBySinglePattern.unpersist();
-*/
+
 		//Partie affichage des exo A et B
 		System.out.println("######  EXO 1 : A ######");
 		System.out.println("La distribution des durée pour les NotIdle");
