@@ -3,6 +3,7 @@ package bigdata;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -93,24 +94,28 @@ public class Exo1 {
 		durationIdle.unpersist();
 		
 		// EXERCICE C : Pour chaque motif d’accès (parmi les 22), la distribution de la durée des phases où ce motif apparaît seul (pas dans une liste avec des autres motifs).
-		JavaPairRDD<String, Iterable<String>> groupBySinglePattern = notIdle.filter(activity -> activity.split(";")[4].equals("1")).map(activity -> 
-				{
-					String[] row = activity.split(";");
-					return row[3] + ";" + row[2];
-				}).groupBy(activity -> activity.split(";")[0]);
+		JavaPairRDD<String, List<Double>> durationPerPattern = notIdle.filter(activity -> activity.split(";")[4].equals("1")).mapToPair(activity -> 
+			{
+				String[] split = activity.split(";");
+				List<Double> al = new ArrayList<Double>();
+				al.add(Double.parseDouble(split[2]));
+				return new Tuple2<String, List<Double>>(split[4], al);
+			 }
+		).reduceByKey((c1, c2) -> {List<Double> res = new ArrayList<Double>(); res.addAll(c1); res.addAll(c2); return res;});
 		notIdle.unpersist();
-		groupBySinglePattern.persist(sl);
+		durationPerPattern = durationPerPattern.persist(sl);
+		
+		List<String> singlePatternList = durationPerPattern.map( tuple -> (tuple._1) ).collect();
+		
 
-		List<String> singlePatternList = groupBySinglePattern.map( tuple -> (tuple._1) ).collect();
 		for(String aPatternId : singlePatternList) {
-			JavaRDD<String> aPatternDurationData = groupBySinglePattern.filter(tuple -> ( tuple._1.equals(aPatternId) ) ).flatMap( tuple -> {
-				ArrayList<String> al = new ArrayList<String>();
+			JavaDoubleRDD aPatternDuration = durationPerPattern.filter(tuple -> ( tuple._1.equals(aPatternId) ) ).flatMapToDouble( tuple -> {
+				List<Double> al = new ArrayList<Double>();
 				tuple._2.forEach(activity -> {
-					al.add(activity.split(";")[1]);
+					al.add(activity);
 				});
 				return al.iterator();
 			});
-			JavaDoubleRDD aPatternDuration = aPatternDurationData.mapToDouble(duration -> Double.parseDouble(duration));
 			aPatternDuration = aPatternDuration.persist(sl);
 			//Pour récuperer l'histogramme.
 			Tuple2<double[], long[]> aPatternDurationHistogram = aPatternDuration.histogram(nTranches);
@@ -121,7 +126,8 @@ public class Exo1 {
 			aPatternDuration.unpersist();
 			synthetyzeToFile(context, "Exo1/distriDureeOnePattern" + aPatternId + ".txt", aPatternDurationStat, aPatternDurationPercentiles, aPatternDurationHistogram, nTranches);
 		}
-		groupBySinglePattern.unpersist();
+		durationPerPattern.unpersist();
+		
 
 		//Partie affichage des exo A et B
 		System.out.println("######  EXO 1 : A ######");
