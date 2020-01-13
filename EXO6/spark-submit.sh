@@ -4,7 +4,6 @@
   --master yarn \
   --num-executors 18 \
   --executor-cores 4 \
-#  --executor-memory 5G \
 ./target/Exo6-0.0.1.jar /raw_data/ALCF_repo/phases.csv
 
 #/raw_data/ALCF_repo/phases.csv

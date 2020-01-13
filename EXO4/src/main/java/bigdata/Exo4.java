@@ -2,7 +2,9 @@ package bigdata;
 
 import java.io.BufferedOutputStream;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -58,40 +60,33 @@ public class Exo4 {
 		JavaRDD<String> notIdle = distFile.filter(activity -> 
 		{
 			String[] split = activity.split(";");
-			return !split[0].equals("start") && !split[4].equals("0");
+			return !split[0].equals("start") && !split[6].equals("0");
 		} ).map(activity -> 
 				{ 
 				String[] split = activity.split(";");
 				return split[2] + ";" + split[5];
 
 				});
-		//On sépare les lignes avec plusieur patterns pour le group by qui va suivre, augmentation du nombre de ligne
-		JavaRDD<String> notIdleDurationByJob = notIdle.flatMap( activity -> {
-			String[] split = activity.split(";");
-			String[] jobs = split[1].split(",");
-			ArrayList<String> al = new ArrayList<String>();
-			for(String job : jobs)
-			 {
-				al.add(split[0]+";"+job);
-			 }
-			 return al.iterator();
-		});
 		
-		//On groupe par pattern
-		//JavaPairRDD<String, Iterable<String>> groupBySingleJob = notIdleDurationByJob.groupBy(activity -> activity.split(";")[1]);
-		JavaPairRDD<String, Double> durationBySingleJob = notIdleDurationByJob.groupBy(activity -> activity.split(";")[1]).mapToPair( tuple -> {
-			double sum =0;
-			for(String duration : tuple._2)
+		JavaPairRDD<String, Double> totalDurationPerJob = notIdle.flatMapToPair(line -> 
 			{
-				sum+= Double.parseDouble(duration.split(";")[1]);
-			}
-			return new Tuple2<String,Double>(tuple._1, sum);
-		});
+				String[] split = line.split(";");
+				String[] jobs = split[1].split(",");
+				ArrayList<Tuple2<String,Double>> al = new ArrayList<Tuple2<String,Double>>();
+				for(String job : jobs)
+				 {
+					al.add(new Tuple2<String,Double>(job, Double.parseDouble(split[0])));
+				 }
+				 return al.iterator();
+			 }
+		).reduceByKey((c1, c2) -> c1 + c2);
 		StorageLevel sl = new StorageLevel();
-		durationBySingleJob = durationBySingleJob.persist(sl);
+		totalDurationPerJob = totalDurationPerJob.persist(sl);
+		
+		//System.out.println("############################################" + totalDurationPerJob.count());
 
 		// EXERCICE A : La distribution de duréee par job.
-		JavaDoubleRDD aJobDuration = durationBySingleJob.mapToDouble(tuple -> tuple._2);
+		JavaDoubleRDD aJobDuration = totalDurationPerJob.mapToDouble(tuple -> tuple._2);
 		aJobDuration = aJobDuration.persist(sl);
 
 		//Pour récuperer l'histogramme.
@@ -104,7 +99,7 @@ public class Exo4 {
 		synthetyzeToFile(context, "Exo4/distriDureeByJob.txt", aJobDurationStat, aJobDurationPercentiles, aJobDurationHistogram, nTranches);
 
 		// EXERCICE B : Top 10 jobs en temps total d’accès au PFS.
-		List<Tuple2<String,Double>> topNJobDuration = durationBySingleJob.top(topN,((v, w) -> {return Double.compare(v._2, w._2); } ) );
+		List<Tuple2<String,Double>> topNJobDuration = totalDurationPerJob.top(topN, SerializableComparator.serialize((v, w) -> {return (int)(v._2 - w._2); } ));
 		try {
 			writeToLocal(context, "Exo4/topTenJobTotalDuree.txt", topNJobDuration.toString());
 		} catch(IOException ex){
@@ -120,11 +115,19 @@ public class Exo4 {
 		showQ1MQ3(aJobDurationPercentiles[0], aJobDurationPercentiles[1], aJobDurationPercentiles[2]);
 		showHistogram(aJobDurationHistogram, nTranches);
 
-/*		System.out.println("######  EXO 4 : B ######");
+		System.out.println("######  EXO 4 : B ######");
 		System.out.println("Top 10 jobs en temps total d’accès au PFS. : ");
 		System.out.println(topNJobDuration.toString());
-*/
+
 		context.close();
+	}
+	
+	public interface SerializableComparator<T> extends Comparator<T>, Serializable {
+
+	  static <T> SerializableComparator<T> serialize(SerializableComparator<T> comparator) {
+	    return comparator;
+	  }
+
 	}
 
 	/*

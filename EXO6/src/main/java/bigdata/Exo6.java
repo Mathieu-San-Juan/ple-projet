@@ -2,7 +2,9 @@ package bigdata;
 
 import java.io.BufferedOutputStream;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -51,54 +53,47 @@ public class Exo6 {
 
 				});
 		//on sépare les patterns
-		JavaRDD<String> notIdleDurationByPattern = notIdle.flatMap((v)-> {
-			String[] split = v.split(";");
-			String[] patterns = split[1].split(",");
-			ArrayList<String> al = new ArrayList<String>();
-			for(String pattern : patterns)
-			 {
-				al.add(split[0]+";"+pattern);
-			 }
-			 return al.iterator();
-		});
-
-		JavaPairRDD<String, Iterable<String>> groupBySinglePattern = notIdleDurationByPattern.groupBy(activity -> activity.split(";")[1]);
-		
-		JavaDoubleRDD aPatternDuration = groupBySinglePattern.mapToDouble(tuple -> 
-		{
-			double sum =0;
-			for(String duration : tuple._2)
+		JavaPairRDD<String, Double> totalDurationPerPattern = notIdle.flatMapToPair(line -> 
 			{
-				sum+= Double.parseDouble(duration.split(";")[1]);
-			}
-			return sum;
+				String[] split = line.split(";");
+				String[] patterns = split[1].split(",");
+				ArrayList<Tuple2<String,Double>> al = new ArrayList<Tuple2<String,Double>>();
+				for(String pattern : patterns)
+				 {
+					al.add(new Tuple2<String,Double>(pattern, Double.parseDouble(split[0])));
+				 }
+				 return al.iterator();
+			 }
+		).reduceByKey((c1, c2) -> c1 + c2);
+		StorageLevel sl = new StorageLevel();
+		totalDurationPerPattern = totalDurationPerPattern.persist(sl);
+		
+		
+		JavaDoubleRDD aPatternDuration = totalDurationPerPattern.mapToDouble(tuple -> 
+		{
+			return tuple._2$mcD$sp();
 		});
 
 		//Pour récuperer la somme total afin de calculer les pourcentage plus tard.
 		Double totalSumOfDuration = aPatternDuration.stats().sum();
 
-		JavaPairRDD<String, Double> durationPercentByPattern = groupBySinglePattern.mapToPair( tuple -> {
-			double sum =0;
-			for(String duration : tuple._2)
-			{
-				sum+= Double.parseDouble(duration.split(";")[1]);
-			}
-			return new Tuple2<String,Double>(tuple._1, (Double)(sum / totalSumOfDuration)*100);
-		});
-		StorageLevel sl = new StorageLevel();
-		//durationPercentByPattern = durationPercentByPattern;
-		durationPercentByPattern.saveAsTextFile("EXO6/durationPercent/");
+		JavaPairRDD<String, Double> durationPercentByPattern = totalDurationPerPattern.mapToPair(tuple -> {
+			return new Tuple2<String,Double>(tuple._1, (Double)(tuple._2 * 100.0D / totalSumOfDuration ));
+		} );
 		
-		/*try {	
-			writeToLocal(context, "Exo6/durationPercentByPattern.txt", durationPercentByPattern.toString());
+		//Que 22 motifs donc collect pas méchant mais sinon on ecrirait directement avec un saveastextfile
+		List<Tuple2<String,Double>> durationPercentByPatternList = durationPercentByPattern.collect();
+		//durationPercentByPattern.saveAsTextFile("EXO6/durationPercent/");
+		try {
+			writeToLocal(context, "Exo6/patternPercentDuree.txt", durationPercentByPatternList.toString());
 		} catch(IOException ex){
 			System.err.println("############################################");
 			System.err.println("Problème avec l'écriture sur fichier en HDFS");
 			System.err.println("############################################");
-		}*/
-/*
+		}
+
 		// EXERCICE B : Top 10 pattern en représentativité.
-		List<Tuple2<String,Double>> topNPatternPercentDuration = durationPercentByPattern.top(topN,((v, w) -> {return Double.compare(v._2, w._2); } ) );
+		List<Tuple2<String,Double>> topNPatternPercentDuration = durationPercentByPattern.top(topN,SerializableComparator.serialize((v, w) -> {return Double.compare(v._2, w._2); } ) );
 		try {
 			writeToLocal(context, "Exo6/topTenPatternPercentDuree.txt", topNPatternPercentDuration.toString());
 		} catch(IOException ex){
@@ -106,17 +101,25 @@ public class Exo6 {
 			System.err.println("Problème avec l'écriture sur fichier en HDFS");
 			System.err.println("############################################");
 		}
-*/
+
+		
 		//Partie affichage des exo A et B
 		System.out.println("######  EXO 6 : A ######");
 		System.out.println("Pourcentage du temps total de phases où chaque motif a été observé seul ou concurrent");
-		durationPercentByPattern.foreach(f -> System.out.println(f._1()+"  -  " + f._2()));
-		//System.out.println(durationPercentByPattern.toString());
+		System.out.println(durationPercentByPatternList.toString());
 		System.out.println("######  EXO 6 : B ######");
-	//	System.out.println("Top 10 pattern : ");
-	//	System.out.println(topNPatternPercentDuration.toString());
+		System.out.println("Top 10 pattern : ");
+		System.out.println(topNPatternPercentDuration.toString());
 
 		context.close();
+	}
+	
+	public interface SerializableComparator<T> extends Comparator<T>, Serializable {
+
+	  static <T> SerializableComparator<T> serialize(SerializableComparator<T> comparator) {
+	    return comparator;
+	  }
+
 	}
 
 	/*
