@@ -2,8 +2,6 @@ package bigdata;
 
 import java.io.BufferedOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -18,7 +16,6 @@ import org.apache.spark.util.StatCounter;
 import scala.Tuple2;
 
 import org.apache.spark.api.java.JavaRDD;
-import org.apache.spark.api.java.JavaDoubleRDD;
 import org.apache.spark.api.java.JavaPairRDD;
 
 //0- Start
@@ -94,27 +91,21 @@ public class Exo1 {
 		durationIdle.unpersist();
 		
 		// EXERCICE C : Pour chaque motif d’accès (parmi les 22), la distribution de la durée des phases où ce motif apparaît seul (pas dans une liste avec des autres motifs).
-		JavaPairRDD<String, List<Double>> durationPerPattern = notIdle.filter(activity -> activity.split(";")[4].equals("1")).mapToPair(activity -> 
+		JavaPairRDD<String, Double> durationPerPattern = notIdle.filter(activity -> activity.split(";")[4].equals("1")).mapToPair(activity -> 
 			{
 				String[] split = activity.split(";");
-				List<Double> al = new ArrayList<Double>();
-				al.add(Double.parseDouble(split[2]));
-				return new Tuple2<String, List<Double>>(split[4], al);
+				return new Tuple2<String, Double>(split[3], Double.parseDouble(split[2]));
 			 }
-		).reduceByKey((c1, c2) -> {List<Double> res = new ArrayList<Double>(); res.addAll(c1); res.addAll(c2); return res;});
+		);
 		notIdle.unpersist();
 		durationPerPattern = durationPerPattern.persist(sl);
 		
-		List<String> singlePatternList = durationPerPattern.map( tuple -> (tuple._1) ).collect();
 		
-
+		List<String> singlePatternList = durationPerPattern.map( tuple -> (tuple._1) ).distinct().collect();
+		
 		for(String aPatternId : singlePatternList) {
-			JavaDoubleRDD aPatternDuration = durationPerPattern.filter(tuple -> ( tuple._1.equals(aPatternId) ) ).flatMapToDouble( tuple -> {
-				List<Double> al = new ArrayList<Double>();
-				tuple._2.forEach(activity -> {
-					al.add(activity);
-				});
-				return al.iterator();
+			JavaDoubleRDD aPatternDuration = durationPerPattern.filter(tuple -> ( tuple._1.equals(aPatternId) ) ).mapToDouble( tuple -> {
+				return tuple._2;
 			});
 			aPatternDuration = aPatternDuration.persist(sl);
 			//Pour récuperer l'histogramme.
