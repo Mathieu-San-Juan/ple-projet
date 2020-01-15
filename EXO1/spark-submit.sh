@@ -7,4 +7,4 @@
 ./target/Exo1-0.0.1.jar /raw_data/ALCF_repo/phases.csv $1
 
 #/raw_data/ALCF_repo/phases.csv
-#/user/msjuan/cpPhase.csv
+#/user/msjuan/cpPhase.cs

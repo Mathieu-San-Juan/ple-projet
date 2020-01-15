@@ -188,10 +188,9 @@ public class Exo1 {
 	*/
 	private static void showStat(StatCounter statCounter) {
 		if (statCounter != null) {
-			System.out.println("+-------------------------------+-------------------------+\n");
-			System.out.println("| Min \t| Max \t\t\t| Mean \t\t|");
-			System.out.println("+-------------------------------+-------------------------+\n");
-			System.out.println("| " + statCounter.min() + " \t |\t " + statCounter.max() + "\t|\t " + statCounter.mean() + "\t|");
+			System.out.println("\t Min     : " + statCounter.min());
+			System.out.println("\t Max     : " + statCounter.max());
+			System.out.println("\t Mean    : " + statCounter.mean());
 		}
 	}
 
@@ -202,11 +201,9 @@ public class Exo1 {
 	 * @param q3
 	*/
 	private static void showQ1MQ3(double q1, double m, double q3) {
-		System.out.println("+-----------------------------------------------+");
-		System.out.println("|\t Q1 \t|\t Q2 \t|\t Q3 \t|");
-		System.out.println("+-----------------------------------------------+");
-		System.out.println("|\t " + q1 + " \t|\t " + m + " \t|\t " + q3 + " \t|");
-		System.out.println("+-----------------------------------------------+\n");
+		System.out.println("\t Q1      : " + q1);
+		System.out.println("\t Médiane : " + m);
+		System.out.println("\t Q3      : " + q3);
 	}
 
 	/*
@@ -217,11 +214,14 @@ public class Exo1 {
 	private static void showHistogram(Tuple2<double[], long[]> histogram, int nTranches) {
 		if (histogram != null) {
 			System.out.println("Histogram sur " + nTranches + " tranche(s).");
-			System.out.println("+------------------------+------------------------+");
-			System.out.println("|\t Valeur  \t|\tNombre \t|");
+			System.out.println("Tranche de Valeurs : Effectif");
 			for (int i = 0; i < nTranches; ++i) {
-				System.out.println("| " + histogram._1()[i] + " \t |\t " + histogram._2()[i] + "\t|");
-				System.out.println("+------------------------+--------------+");
+				if(i == 0) {
+					System.out.println("De min à " + histogram._1()[i] + " \t : " + histogram._2()[i]);
+				} else {
+					System.out.println("De " + histogram._1()[i-1] + " à " + histogram._1()[i] + " \t : " + histogram._2()[i]);
+				}
+				
 			}
 		}
 	}

@@ -71,7 +71,7 @@ public class Exo6 {
 		
 		JavaDoubleRDD aPatternDuration = totalDurationPerPattern.mapToDouble(tuple -> 
 		{
-			return tuple._2$mcD$sp();
+			return tuple._2;
 		});
 
 		//Pour récuperer la somme total afin de calculer les pourcentage plus tard.
